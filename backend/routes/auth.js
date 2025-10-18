@@ -15,7 +15,10 @@ router.post('/register', async (req, res) => {
     const { email, password, name } = req.body;
 
     if (!email || !password || !name) {
-      return res.status(400).json({ error: 'Email, password, and name are required' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'Email, password, and name are required' 
+      });
     }
 
     const db = getDB();
@@ -24,12 +27,18 @@ router.post('/register', async (req, res) => {
     // Check if user already exists
     const existingUser = await usersCollection.findOne({ email });
     if (existingUser) {
-      return res.status(409).json({ error: 'User already exists with this email' });
+      return res.status(409).json({ 
+        success: false,
+        error: 'User already exists with this email' 
+      });
     }
 
     // Validate password
     if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'Password must be at least 8 characters' 
+      });
     }
 
     // Hash password
@@ -90,6 +99,7 @@ router.post('/login', async (req, res) => {
     // Check if profile is completed
     if (!user.profileCompleted) {
       return res.status(200).json({
+        success: false,
         uid: user._id.toString(),
         email: user.email,
         name: user.name,
@@ -98,7 +108,26 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    // Auto-initialize preferences if they don't exist
+    const prefsCollection = db.collection('preferences');
+    
+    // Check for both ObjectId and string formats
+    let existingPrefs = await prefsCollection.findOne({ userId: user._id });
+    if (!existingPrefs) {
+      existingPrefs = await prefsCollection.findOne({ userId: user._id.toString() });
+    }
+    
+    if (!existingPrefs) {
+      await createDefaultPreferences(user._id.toString());
+      console.log(`✅ Auto-initialized preferences for user: ${user.email}`);
+    } else {
+      console.log(`✅ Preferences already exist for user: ${user.email}`);
+    }
+
+    const token = generateToken(user._id.toString(), user.email);
+    
     res.json({
+      success: true,
       uid: user._id.toString(),
       email: user.email,
       name: user.name,
@@ -107,11 +136,14 @@ router.post('/login', async (req, res) => {
       avatar: user.avatar,
       createdAt: user.createdAt,
       profileCompleted: true,
-      token: generateToken(user._id.toString(), user.email),
+      token: token,
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: error.message || 'Login failed' });
+    res.status(500).json({ 
+      success: false,
+      error: error.message || 'Login failed' 
+    });
   }
 });
 
@@ -473,23 +505,47 @@ router.patch('/profile', verifyToken, async (req, res) => {
 
     updateData.updatedAt = new Date().toISOString();
 
-    // Update profile
-    const result = await usersCollection.findOneAndUpdate(
+    // Update profile - use updateOne for reliability
+    const updateResult = await usersCollection.updateOne(
       { _id: user._id },
-      { $set: updateData },
-      { returnDocument: 'after' }
+      { $set: updateData }
     );
+
+    // Check if update was successful
+    if (updateResult.matchedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    if (updateResult.modifiedCount === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No changes were made to the profile'
+      });
+    }
+
+    // Fetch the updated user document
+    const updatedUser = await usersCollection.findOne({ _id: user._id });
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'Failed to retrieve updated profile'
+      });
+    }
 
     res.json({
       success: true,
       message: 'Profile updated successfully',
       data: {
-        uid: result.value._id.toString(),
-        email: result.value.email,
-        name: result.value.name,
-        age: result.value.age,
-        phone: result.value.phone,
-        avatar: result.value.avatar
+        uid: updatedUser._id.toString(),
+        email: updatedUser.email,
+        name: updatedUser.name,
+        age: updatedUser.age,
+        phone: updatedUser.phone,
+        avatar: updatedUser.avatar
       }
     });
   } catch (error) {

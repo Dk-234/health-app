@@ -14,9 +14,16 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   async (config) => {
     try {
-      const token = await AsyncStorage.getItem('userToken');
+      // Try both key names for compatibility
+      let token = await AsyncStorage.getItem('@auth_token');
+      if (!token) {
+        token = await AsyncStorage.getItem('userToken');
+      }
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+        console.log('✅ Token attached to request:', token.substring(0, 20) + '...');
+      } else {
+        console.warn('⚠️ No token found in AsyncStorage');
       }
     } catch (error) {
       console.error('Error retrieving token:', error);

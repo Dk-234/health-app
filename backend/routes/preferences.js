@@ -113,11 +113,17 @@ router.put('/preferences/:key', async (req, res) => {
       });
     }
 
-    // Allowed preference keys
+    // Allowed preference keys - include both top-level and notification keys
     const allowedKeys = [
       'dataSharing',
       'analyticsEnabled',
-      'thirdPartyIntegration'
+      'thirdPartyIntegration',
+      'inAppAlerts',           // notification keys
+      'emailNotifications',
+      'pushNotifications',
+      'weeklyDigest',
+      'marketingEmails',
+      'communityUpdates'
     ];
 
     if (!allowedKeys.includes(key)) {
@@ -137,7 +143,19 @@ router.put('/preferences/:key', async (req, res) => {
       });
     }
 
-    const updatedPrefs = await updatePreference(userId, key, value);
+    // If updating a notification key, handle it specially
+    const notificationKeys = ['inAppAlerts', 'emailNotifications', 'pushNotifications', 'weeklyDigest', 'marketingEmails', 'communityUpdates'];
+    let updatedPrefs;
+    
+    if (notificationKeys.includes(key)) {
+      // Update notification preference
+      const notifications = {};
+      notifications[key] = value;
+      updatedPrefs = await updateNotifications(userId, notifications);
+    } else {
+      // Update top-level preference
+      updatedPrefs = await updatePreference(userId, key, value);
+    }
 
     res.json({
       success: true,

@@ -21,13 +21,32 @@ import {
   Snackbar,
 } from 'react-native-paper';
 import { useAuth } from '../context/AuthContext';
+import AnimatedLoading from '../components/AnimatedLoading';
+import AnimatedError from '../components/AnimatedError';
+import AnimatedSuccess from '../components/AnimatedSuccess';
 
 const SettingsScreen = ({ navigation }) => {
-  const { user, signOut, updatePreferences, changePassword, updateProfile } = useAuth();
+  const { user, signOut, updatePreferences: authUpdatePreferences, changePassword, updateProfile, preferences: authPreferences } = useAuth();
   
   // Loading states
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Loading...');
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Error state
+  const [errorState, setErrorState] = useState({
+    visible: false,
+    title: 'Oops!',
+    message: '',
+    showRetry: false,
+    onRetry: null,
+  });
+
+  // Success state
+  const [successState, setSuccessState] = useState({
+    visible: false,
+    message: 'Success!',
+  });
   
   // Preferences state
   const [preferences, setPreferences] = useState({
@@ -78,15 +97,54 @@ const SettingsScreen = ({ navigation }) => {
   // Load preferences on mount
   useEffect(() => {
     loadPreferences();
-  }, []);
+  }, [authPreferences]);
+
+  const showError = (title, message, onRetry = null) => {
+    setErrorState({
+      visible: true,
+      title,
+      message,
+      showRetry: !!onRetry,
+      onRetry,
+    });
+  };
+
+  const dismissError = () => {
+    setErrorState({ ...errorState, visible: false });
+  };
+
+  const showSuccess = (message) => {
+    setSuccessState({
+      visible: true,
+      message,
+    });
+  };
+
+  const dismissSuccess = () => {
+    setSuccessState({ ...successState, visible: false });
+  };
+
+  const showSnackbar = (message, type = 'success') => {
+    setSnackbar({
+      visible: true,
+      message,
+      type,
+    });
+  };
 
   const loadPreferences = async () => {
     try {
       setRefreshing(true);
-      // This will be implemented in AuthContext
-      // For now, preferences are in state
+      
+      // Use preferences from AuthContext if available
+      if (authPreferences) {
+        console.log('📥 Loading preferences from AuthContext:', authPreferences);
+        setPreferences(authPreferences);
+      }
+      
       setRefreshing(false);
     } catch (error) {
+      console.error('❌ Error loading preferences:', error);
       showSnackbar('Error loading preferences', 'error');
       setRefreshing(false);
     }
@@ -96,7 +154,16 @@ const SettingsScreen = ({ navigation }) => {
     try {
       setLoading(true);
       
-      // Update local state
+      // Handle notification keys that come with 'notification_' prefix
+      let preferenceKey = key;
+      if (key.startsWith('notification_')) {
+        preferenceKey = key.replace('notification_', '');
+      }
+      
+      // Call updatePreferences from AuthContext to save to backend
+      await authUpdatePreferences(preferenceKey, value);
+      
+      // Update local state for immediate UI feedback
       if (key.startsWith('notification_')) {
         const notifKey = key.replace('notification_', '');
         setPreferences({
@@ -113,8 +180,8 @@ const SettingsScreen = ({ navigation }) => {
         });
       }
       
-      // Call API (to be implemented in AuthContext)
-      showSnackbar(`${key} updated successfully`, 'success');
+      setLoading(false);
+      showSuccess(`${key} updated successfully`);
     } catch (error) {
       showSnackbar('Error updating preference', 'error');
       setLoading(false);
@@ -141,6 +208,7 @@ const SettingsScreen = ({ navigation }) => {
       }
 
       setLoading(true);
+      setLoadingMessage('Updating profile...');
 
       // Call updateProfile from AuthContext
       await updateProfile({
@@ -149,39 +217,44 @@ const SettingsScreen = ({ navigation }) => {
         phone: profileData.phone || undefined,
       });
 
-      showSnackbar('Profile updated successfully', 'success');
+      setLoading(false);
+      showSuccess('Profile updated successfully');
       setEditProfileMode(false);
-      setLoading(false);
     } catch (error) {
-      showSnackbar(error.message || 'Error updating profile', 'error');
       setLoading(false);
+      showError(
+        'Update Failed',
+        error.message || 'Error updating profile',
+        () => handleProfileEdit()
+      );
     }
   };
 
   const handleChangePassword = async () => {
     try {
       if (!passwordData.currentPassword) {
-        showSnackbar('Current password is required', 'error');
+        showError('Required Field', 'Current password is required');
         return;
       }
 
       if (!passwordData.newPassword || passwordData.newPassword.length < 8) {
-        showSnackbar('New password must be at least 8 characters', 'error');
+        showError('Invalid Password', 'New password must be at least 8 characters');
         return;
       }
 
       if (passwordData.newPassword !== passwordData.confirmPassword) {
-        showSnackbar('Passwords do not match', 'error');
+        showError('Password Mismatch', 'Passwords do not match');
         return;
       }
 
       const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
       if (!passwordRegex.test(passwordData.newPassword)) {
-        showSnackbar('Password must contain uppercase, lowercase, number, and special character', 'error');
+        showError('Weak Password', 'Password must contain uppercase, lowercase, number, and special character (@$!%*?&)');
         return;
       }
 
       setLoading(true);
+      setLoadingMessage('Changing password...');
 
       // Call changePassword from AuthContext
       await changePassword({
@@ -190,7 +263,8 @@ const SettingsScreen = ({ navigation }) => {
         confirmPassword: passwordData.confirmPassword,
       });
 
-      showSnackbar('Password changed successfully', 'success');
+      setLoading(false);
+      showSuccess('Password changed successfully');
       setPasswordModalVisible(false);
       setPasswordData({
         currentPassword: '',
@@ -199,32 +273,61 @@ const SettingsScreen = ({ navigation }) => {
       });
       setLoading(false);
     } catch (error) {
-      showSnackbar(error.message || 'Error changing password', 'error');
       setLoading(false);
+      showError(
+        'Password Change Failed',
+        error.message || 'Error changing password',
+        () => handleChangePassword()
+      );
     }
   };
 
   const handleLogout = async () => {
     try {
       setLoading(true);
+      setLoadingMessage('Logging out...');
       await signOut();
       setLoading(false);
+      
+      // Reset navigation stack and go to Login
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Login' }],
+      });
     } catch (error) {
-      showSnackbar('Error logging out', 'error');
       setLoading(false);
+      showError('Logout Failed', 'Error logging out', () => handleLogout());
     }
-  };
-
-  const showSnackbar = (message, type = 'success') => {
-    setSnackbar({
-      visible: true,
-      message,
-      type,
-    });
   };
 
   return (
     <View style={styles.container}>
+      {/* Animated Loading */}
+      <AnimatedLoading 
+        visible={loading} 
+        message={loadingMessage}
+        size="large"
+        color="#2E7D32"
+      />
+
+      {/* Animated Error */}
+      <AnimatedError
+        visible={errorState.visible}
+        title={errorState.title}
+        message={errorState.message}
+        showRetry={errorState.showRetry}
+        onRetry={errorState.onRetry}
+        onDismiss={dismissError}
+      />
+
+      {/* Animated Success */}
+      <AnimatedSuccess
+        visible={successState.visible}
+        message={successState.message}
+        duration={2000}
+        onComplete={dismissSuccess}
+      />
+
       <ScrollView
         style={styles.scrollView}
         refreshControl={
@@ -234,16 +337,34 @@ const SettingsScreen = ({ navigation }) => {
         {/* USER INFO SECTION */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
+          <View style={styles.card} pointerEvents="none">
+            <View style={styles.userInfoContainer}>
+              <View style={styles.userAvatarContainer}>
+                <Text style={styles.userAvatar}>{user?.avatar || '👤'}</Text>
+              </View>
+              <View style={styles.userDetailsContainer}>
+                <Text style={styles.userName}>{user?.name || 'User'}</Text>
+                <Text style={styles.userEmail}>{user?.email || 'email@example.com'}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* ACCOUNT INFORMATION SECTION */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account Information</Text>
           <Card style={styles.card}>
             <Card.Content>
-              <View style={styles.userInfoContainer}>
-                <View style={styles.userAvatarContainer}>
-                  <Text style={styles.userAvatar}>{user?.avatar || '👤'}</Text>
-                </View>
-                <View style={styles.userDetailsContainer}>
-                  <Text style={styles.userName}>{user?.name || 'User'}</Text>
-                  <Text style={styles.userEmail}>{user?.email || 'email@example.com'}</Text>
-                </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Email</Text>
+                <Text style={styles.infoValue}>{user?.email || 'N/A'}</Text>
+              </View>
+              <Divider style={styles.divider} />
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Member Since</Text>
+                <Text style={styles.infoValue}>
+                  {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                </Text>
               </View>
             </Card.Content>
           </Card>

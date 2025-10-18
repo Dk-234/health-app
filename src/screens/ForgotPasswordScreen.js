@@ -14,6 +14,9 @@ import * as Yup from 'yup';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
 import CaptchaComponent from '../components/CaptchaComponent';
+import AnimatedLoading from '../components/AnimatedLoading';
+import AnimatedError from '../components/AnimatedError';
+import AnimatedSuccess from '../components/AnimatedSuccess';
 
 const PasswordResetSchema = Yup.object().shape({
   email: Yup.string().email('Invalid email').required('Email is required'),
@@ -38,10 +41,40 @@ const ForgotPasswordScreen = ({ navigation }) => {
   const { resetPassword } = useAuth();
   const [step, setStep] = useState(1); // 1: Email, 2: Security Questions, 3: New Password
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Loading...');
   const [email, setEmail] = useState('');
   const [captchaVerified, setCaptchaVerified] = useState(false);
   const [securityQuestions, setSecurityQuestions] = useState([]);
   const [userAnswers, setUserAnswers] = useState({});
+
+  // Error state
+  const [errorState, setErrorState] = useState({
+    visible: false,
+    title: 'Error',
+    message: '',
+    showRetry: false,
+    onRetry: null,
+  });
+
+  // Success state
+  const [successState, setSuccessState] = useState({
+    visible: false,
+    message: 'Success!',
+  });
+
+  const showError = (title, message, onRetry = null) => {
+    setErrorState({
+      visible: true,
+      title,
+      message,
+      showRetry: !!onRetry,
+      onRetry,
+    });
+  };
+
+  const dismissError = () => {
+    setErrorState({ ...errorState, visible: false });
+  };
 
   const handleCaptchaVerify = (verified, token) => {
     setCaptchaVerified(verified);
@@ -55,6 +88,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
     }
 
     setLoading(true);
+    setLoadingMessage('Fetching security questions...');
     try {
       setEmail(values.email);
       // Move to security questions step
@@ -64,31 +98,43 @@ const ForgotPasswordScreen = ({ navigation }) => {
       setStep(2);
       setCaptchaVerified(false);
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to verify email');
+      setLoading(false);
+      showError('Failed to Fetch Questions', error.message || 'Could not load security questions');
     } finally {
       setLoading(false);
     }
   };
 
   // Step 2: Answer security questions
-  const handleSecurityQuestionsSubmit = (values) => {
+  const handleSecurityQuestionsSubmit = async (values) => {
     if (!values.answer1 || !values.answer2 || !values.answer3) {
       Alert.alert('Error', 'Please answer all security questions');
       return;
     }
 
-    setUserAnswers({
-      answer1: values.answer1,
-      answer2: values.answer2,
-      answer3: values.answer3,
-    });
+    setLoading(true);
+    setLoadingMessage('Verifying answers...');
+    try {
+      // Optionally validate answers on backend before moving to password step
+      // For now, we'll just store them and move to next step
+      setUserAnswers({
+        answer1: values.answer1,
+        answer2: values.answer2,
+        answer3: values.answer3,
+      });
 
-    setStep(3);
+      setLoading(false);
+      setStep(3);
+    } catch (error) {
+      setLoading(false);
+      showError('Verification Failed', error.message || 'Could not verify answers');
+    }
   };
 
   // Step 3: Set new password and reset
   const handlePasswordReset = async (values) => {
     setLoading(true);
+    setLoadingMessage('Resetting password...');
     try {
       const answers = [
         userAnswers.answer1,
@@ -98,6 +144,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
 
       await resetPassword(email, answers, values.newPassword);
 
+      setLoading(false);
       Alert.alert(
         'Success',
         'Your password has been reset successfully. Please login with your new password.',
@@ -109,9 +156,8 @@ const ForgotPasswordScreen = ({ navigation }) => {
         ]
       );
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to reset password');
-    } finally {
       setLoading(false);
+      showError('Password Reset Failed', error.message || 'Failed to reset password');
     }
   };
 
@@ -121,6 +167,24 @@ const ForgotPasswordScreen = ({ navigation }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
       >
+        {/* Animated Loading */}
+        <AnimatedLoading 
+          visible={loading} 
+          message={loadingMessage}
+          size="large"
+          color="#2E7D32"
+        />
+
+        {/* Animated Error */}
+        <AnimatedError
+          visible={errorState.visible}
+          title={errorState.title}
+          message={errorState.message}
+          showRetry={errorState.showRetry}
+          onRetry={errorState.onRetry}
+          onDismiss={dismissError}
+        />
+
         <ScrollView contentContainerStyle={styles.scrollView}>
           <View style={styles.header}>
             <Text style={styles.title}>Reset Password</Text>
@@ -186,6 +250,22 @@ const ForgotPasswordScreen = ({ navigation }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
       >
+        {/* Animated Loading */}
+        <AnimatedLoading 
+          visible={loading} 
+          message={loadingMessage}
+          size="large"
+          color="#2E7D32"
+        />
+
+        {/* Animated Error */}
+        <AnimatedError
+          visible={errorState.visible}
+          title={errorState.title}
+          message={errorState.message}
+          onDismiss={dismissError}
+        />
+
         <ScrollView contentContainerStyle={styles.scrollView}>
           <View style={styles.header}>
             <Text style={styles.title}>Security Verification</Text>
@@ -257,6 +337,22 @@ const ForgotPasswordScreen = ({ navigation }) => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      {/* Animated Loading */}
+      <AnimatedLoading 
+        visible={loading} 
+        message={loadingMessage}
+        size="large"
+        color="#2E7D32"
+      />
+
+      {/* Animated Error */}
+      <AnimatedError
+        visible={errorState.visible}
+        title={errorState.title}
+        message={errorState.message}
+        onDismiss={dismissError}
+      />
+
       <ScrollView contentContainerStyle={styles.scrollView}>
         <View style={styles.header}>
           <Text style={styles.title}>Create New Password</Text>

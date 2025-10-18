@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Alert,
-  Image,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -14,8 +12,6 @@ import { TextInput, Button } from 'react-native-paper';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useAuth } from '../context/AuthContext';
-import { authService } from '../services/authService';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 const ProfileSchema = Yup.object().shape({
   name: Yup.string()
@@ -34,7 +30,6 @@ const ProfileSchema = Yup.object().shape({
 const ProfileScreen = ({ navigation }) => {
   const { user, updateUserProfile } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [avatarUri, setAvatarUri] = useState(user?.avatar || null);
 
   const handleUpdateProfile = async (values) => {
     if (!user) return;
@@ -46,7 +41,6 @@ const ProfileScreen = ({ navigation }) => {
         name: values.name,
         age: values.age ? parseInt(values.age) : null,
         phone: values.phone || null,
-        avatar: avatarUri,
       };
 
       await updateUserProfile(updates);
@@ -58,26 +52,6 @@ const ProfileScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const selectAvatar = () => {
-    // For now, use a placeholder. In a real app, you'd use expo-image-picker
-    const defaultAvatars = [
-      '👤', // Default user icon
-      '😊', '😎', '🤓', '😍', '🥸', '🤠', '🧑', '👨', '👩'
-    ];
-    
-    Alert.alert(
-      'Select Avatar',
-      'Choose an avatar or use default',
-      [
-        ...defaultAvatars.map((avatar, index) => ({
-          text: avatar,
-          onPress: () => setAvatarUri(avatar),
-        })),
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
   };
 
   if (!user) {
@@ -94,34 +68,6 @@ const ProfileScreen = ({ navigation }) => {
       style={styles.container}
     >
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Profile Picture Section */}
-        <View style={styles.profilePictureSection}>
-          <TouchableOpacity
-            style={styles.avatarContainer}
-            onPress={selectAvatar}
-          >
-            <View style={styles.avatar}>
-              {avatarUri ? (
-                <Text style={styles.avatarText}>{avatarUri}</Text>
-              ) : (
-                <MaterialCommunityIcons
-                  name="account-circle"
-                  size={80}
-                  color="#2196F3"
-                />
-              )}
-            </View>
-            <View style={styles.editBadge}>
-              <MaterialCommunityIcons
-                name="pencil"
-                size={16}
-                color="white"
-              />
-            </View>
-          </TouchableOpacity>
-          <Text style={styles.profileEmail}>{user.email}</Text>
-        </View>
-
         {/* Form Section */}
         <View style={styles.formSection}>
           <Formik
@@ -219,63 +165,10 @@ const ProfileScreen = ({ navigation }) => {
                   )}
                 </View>
 
-                {/* Buttons */}
-                <View style={styles.buttonGroup}>
-                  <Button
-                    mode="contained"
-                    onPress={handleSubmit}
-                    loading={loading}
-                    disabled={loading}
-                    style={styles.saveButton}
-                    labelStyle={styles.buttonLabel}
-                  >
-                    Save Changes
-                  </Button>
 
-                  <Button
-                    mode="outlined"
-                    onPress={() => navigation.goBack()}
-                    disabled={loading}
-                    style={styles.cancelButton}
-                  >
-                    Cancel
-                  </Button>
-                </View>
               </View>
             )}
           </Formik>
-        </View>
-
-        {/* Account Info Section */}
-        <View style={styles.infoSection}>
-          <Text style={styles.sectionTitle}>Account Information</Text>
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Email:</Text>
-            <Text style={styles.infoValue}>{user.email}</Text>
-          </View>
-          <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Member Since:</Text>
-            <Text style={styles.infoValue}>
-              {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Password Reset Section */}
-        <View style={styles.securitySection}>
-          <Text style={styles.sectionTitle}>Account Security</Text>
-          <Button
-            mode="contained"
-            onPress={() => navigation.navigate('ForgotPassword')}
-            style={styles.resetPasswordButton}
-            labelStyle={styles.buttonLabel}
-            icon="lock-reset"
-          >
-            Change Password
-          </Button>
-          <Text style={styles.securityInfo}>
-            You'll need to answer your security questions to change your password.
-          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -290,53 +183,6 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     padding: 16,
-  },
-  profilePictureSection: {
-    alignItems: 'center',
-    paddingVertical: 24,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#e3f2fd',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#2196F3',
-  },
-  avatarText: {
-    fontSize: 48,
-  },
-  editBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#2196F3',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'white',
-  },
-  profileEmail: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
   },
   formSection: {
     backgroundColor: 'white',
@@ -385,62 +231,6 @@ const styles = StyleSheet.create({
   cancelButton: {
     paddingVertical: 8,
     borderColor: '#2196F3',
-  },
-  infoSection: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  securitySection: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  resetPasswordButton: {
-    paddingVertical: 8,
-    backgroundColor: '#FF9800',
-    marginBottom: 12,
-  },
-  securityInfo: {
-    fontSize: 12,
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  infoItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  infoValue: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '600',
   },
 });
 

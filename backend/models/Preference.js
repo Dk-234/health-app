@@ -47,16 +47,22 @@ const getPreferences = async (userId) => {
     const db = getDB();
     const collection = db.collection(PREFERENCES_COLLECTION);
 
-    const preferences = await collection.findOne({
-      userId: new ObjectId(userId)
-    });
+    // Handle both string and ObjectId formats
+    let query;
+    try {
+      query = { userId: new ObjectId(userId) };
+    } catch {
+      query = { userId: userId };
+    }
+
+    const preferences = await collection.findOne(query);
 
     if (!preferences) {
       throw new Error('Preferences not found for this user');
     }
 
     return {
-      userId: preferences.userId.toString(),
+      userId: preferences.userId.toString ? preferences.userId.toString() : preferences.userId,
       dataSharing: preferences.dataSharing,
       analyticsEnabled: preferences.analyticsEnabled,
       thirdPartyIntegration: preferences.thirdPartyIntegration,
@@ -78,22 +84,43 @@ const createDefaultPreferences = async (userId) => {
 
     const now = new Date().toISOString();
 
-    const result = await collection.insertOne({
-      userId: new ObjectId(userId),
-      ...DEFAULT_PREFERENCES,
-      createdAt: now,
-      updatedAt: now,
-      version: 1
-    });
+    // Handle both string and ObjectId formats
+    let userIdToStore;
+    try {
+      userIdToStore = new ObjectId(userId);
+    } catch {
+      userIdToStore = userId;
+    }
 
-    console.log(`✅ Default preferences created for user: ${userId}`);
+    // Use updateOne with upsert to avoid duplicate key error
+    // If preferences exist, do nothing. If not, create them.
+    const result = await collection.updateOne(
+      { userId: userIdToStore },
+      {
+        $setOnInsert: {
+          userId: userIdToStore,
+          ...DEFAULT_PREFERENCES,
+          createdAt: now,
+          updatedAt: now,
+          version: 1
+        }
+      },
+      { upsert: true }
+    );
 
+    if (result.upsertedId) {
+      console.log(`✅ Default preferences created for user: ${userId}`);
+    } else if (result.matchedCount > 0) {
+      console.log(`✅ Preferences already exist for user: ${userId}`);
+    }
+
+    // Return the preferences
+    const prefs = await collection.findOne({ userId: userIdToStore });
+    
     return {
-      _id: result.insertedId.toString(),
+      _id: prefs._id.toString(),
       userId: userId,
-      ...DEFAULT_PREFERENCES,
-      createdAt: now,
-      updatedAt: now
+      ...prefs
     };
   } catch (error) {
     console.error('Error creating default preferences:', error);
@@ -121,19 +148,31 @@ const updatePreference = async (userId, preferenceKey, value) => {
       updateObj.$set[preferenceKey] = value;
     }
 
-    const result = await collection.findOneAndUpdate(
-      { userId: new ObjectId(userId) },
-      updateObj,
-      { returnDocument: 'after' }
-    );
+    // Handle both string and ObjectId formats
+    let query;
+    try {
+      query = { userId: new ObjectId(userId) };
+    } catch {
+      query = { userId: userId };
+    }
 
-    if (!result.value) {
+    // Use updateOne for reliability, then fetch the result
+    const updateResult = await collection.updateOne(query, updateObj);
+
+    if (updateResult.matchedCount === 0) {
       throw new Error('User preferences not found');
+    }
+    
+    // Fetch the updated document
+    const updatedPrefs = await collection.findOne(query);
+
+    if (!updatedPrefs) {
+      throw new Error('Failed to retrieve updated preferences');
     }
 
     console.log(`✅ Preference ${preferenceKey} updated for user: ${userId}`);
 
-    return result.value;
+    return updatedPrefs;
   } catch (error) {
     console.error('Error updating preference:', error);
     throw error;
@@ -147,24 +186,39 @@ const updateNotifications = async (userId, notificationSettings) => {
     const collection = db.collection(PREFERENCES_COLLECTION);
     const now = new Date().toISOString();
 
-    const result = await collection.findOneAndUpdate(
-      { userId: new ObjectId(userId) },
+    // Handle both string and ObjectId formats
+    let query;
+    try {
+      query = { userId: new ObjectId(userId) };
+    } catch {
+      query = { userId: userId };
+    }
+
+    // Use updateOne for reliability, then fetch the result
+    const updateResult = await collection.updateOne(
+      query,
       {
         $set: {
           notifications: notificationSettings,
           updatedAt: now
         }
-      },
-      { returnDocument: 'after' }
+      }
     );
 
-    if (!result.value) {
+    if (updateResult.matchedCount === 0) {
       throw new Error('User preferences not found');
+    }
+
+    // Fetch the updated document
+    const updatedPrefs = await collection.findOne(query);
+
+    if (!updatedPrefs) {
+      throw new Error('Failed to retrieve updated preferences');
     }
 
     console.log(`✅ Notifications updated for user: ${userId}`);
 
-    return result.value;
+    return updatedPrefs;
   } catch (error) {
     console.error('Error updating notifications:', error);
     throw error;

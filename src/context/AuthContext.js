@@ -58,6 +58,17 @@ export const AuthProvider = ({ children }) => {
       // Store user data in AsyncStorage
       await AsyncStorage.setItem('@user_data', JSON.stringify(userData));
       
+      // If profile completed and token available, load preferences
+      if (userData.profileCompleted && userData.token) {
+        try {
+          const prefs = await preferencesService.getPreferences();
+          setPreferences(prefs);
+          await AsyncStorage.setItem('@user_preferences', JSON.stringify(prefs));
+        } catch (prefError) {
+          console.warn('Could not load preferences:', prefError);
+        }
+      }
+      
       // If profile not completed, store pending data for profile setup
       if (!userData.profileCompleted) {
         await AsyncStorage.setItem('@pending_uid', userData.uid);
@@ -129,6 +140,17 @@ export const AuthProvider = ({ children }) => {
 
         // Store user data in AsyncStorage
         await AsyncStorage.setItem('@user_data', JSON.stringify(loginData));
+        
+        // Load preferences after successful login
+        if (loginData.token && loginData.profileCompleted) {
+          try {
+            const prefs = await preferencesService.getPreferences();
+            setPreferences(prefs);
+            await AsyncStorage.setItem('@user_preferences', JSON.stringify(prefs));
+          } catch (prefError) {
+            console.warn('Could not load preferences:', prefError);
+          }
+        }
         
         // Clear temporary data
         await AsyncStorage.removeItem('@pending_uid');
