@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Health Monitoring App",
+    "slug": "health-monitoring-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.healthapp.monitoring"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#2196F3"
+      },
+      "package": "com.healthapp.monitoring"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
